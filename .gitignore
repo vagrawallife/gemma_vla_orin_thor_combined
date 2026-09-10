@@ -1,0 +1,29 @@
+# ---- Local environment ----
+.env
+.env.orin
+.env.thor
+
+# ---- Models (never commit, keep in $HOME/models) ----
+models/
+*.gguf
+
+# ---- Runtime artifacts ----
+*.wav
+*.pcm
+audio_prompts/*.wav
+camera/
+*.jpg
+*.jpeg
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

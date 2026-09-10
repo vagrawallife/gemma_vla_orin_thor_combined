@@ -1,0 +1,91 @@
+services:
+  gemma-backend:
+    image: ${GEMMA_SERVER_IMAGE}
+    container_name: gemma-backend
+    runtime: nvidia
+    network_mode: host
+    ipc: host
+    user: "0:0"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - ${MODEL_DIR}:/models:ro
+      - ${CUDA_PATH:-/usr/local/cuda}:/usr/local/cuda:ro
+    environment:
+      LD_LIBRARY_PATH: /usr/local/cuda/targets/aarch64-linux/lib:/usr/local/cuda/lib64:/usr/local/lib
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+    command:
+      - "--model"
+      - "/models/${GEMMA_MODEL_FILE}"
+      - "--mmproj"
+      - "/models/${GEMMA_MMPROJ_FILE}"
+      - "--host"
+      - "127.0.0.1"
+      - "--port"
+      - "8080"
+      - "--ctx-size"
+      - "2048"
+      - "--parallel"
+      - "1"
+      - "--flash-attn"
+      - "${LLAMA_FLASH_ATTN:-on}"
+      - "--n-gpu-layers"
+      - "${LLAMA_NGL:-99}"
+    restart: unless-stopped
+
+  ros-image-bridge:
+    image: ${GEMMA_BRIDGE_IMAGE}
+    container_name: gemma-ros-image-bridge
+    network_mode: host
+    ipc: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION}
+      FRAME_PATH: /camera/latest.jpg
+      FRAME_DIR: /camera
+      GEMMA_RGB_TOPIC: ${GEMMA_RGB_TOPIC}
+      GEMMA_SWIR_TOPIC: ${GEMMA_SWIR_TOPIC}
+      ACTION_GATEWAY_HOST: 0.0.0.0
+      ACTION_GATEWAY_PORT: "8090"
+    volumes:
+      - gemma-camera:/camera
+    restart: unless-stopped
+
+  vla-agent:
+    image: ${GEMMA_AGENT_IMAGE}
+    container_name: gemma-vla-agent
+    network_mode: host
+    ipc: host
+    user: "0:0"
+    depends_on:
+      - gemma-backend
+      - ros-image-bridge
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - audio
+    volumes:
+      - ./app:/app
+      - gemma-camera:/camera:ro
+      - /run/user/${HOST_UID}/pulse:/run/user/${HOST_UID}/pulse
+      - ${HOME}/.config/pulse/cookie:/root/.config/pulse/cookie:ro
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      LLAMA_URL: http://127.0.0.1:8080/v1/chat/completions
+      GEMMA_ROS_BRIDGE_URL: http://127.0.0.1:8090
+      FRAME_DIR: /camera
+      FRAME_PATH: /camera/latest.jpg
+      CAMERA_FRAME_MAX_AGE_SEC: "5"
+      GEMMA_DEFAULT_CAMERA: ${GEMMA_DEFAULT_CAMERA:-rgb}
+      PULSE_SERVER: unix:/run/user/${HOST_UID}/pulse/native
+      MIC_DEVICE: ${MIC_DEVICE}
+      SPK_DEVICE: ${SPK_DEVICE}
+      VOICE: ${VOICE}
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+volumes:
+  gemma-camera:

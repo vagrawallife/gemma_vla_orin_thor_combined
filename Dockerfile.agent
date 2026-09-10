@@ -1,0 +1,53 @@
+# Common agent image for Orin and Thor (arm64)
+# Runs Gemma4_vla.py: STT (onnx-asr) -> llama-server -> TTS (kokoro-onnx)
+# No CUDA compute is used by the agent, so a single image serves both platforms.
+
+ARG JETPACK_TAG=r38.2.1
+FROM nvcr.io/nvidia/l4t-jetpack:${JETPACK_TAG}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libasound2-dev \
+        portaudio19-dev \
+        libgl1-mesa-glx \
+        pulseaudio-utils \
+        alsa-utils \
+        wget \
+        psmisc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip3 install --no-cache-dir \
+        onnxruntime==1.19.2 \
+        numpy==1.26.4 \
+        sounddevice \
+        soundfile \
+        requests \
+        opencv-python \
+        onnx-asr \
+        espeakng-loader \
+        phonemizer-fork \
+        huggingface_hub \
+        attrs \
+        scipy \
+        tqdm \
+        certifi \
+        filelock \
+        fsspec \
+        pyyaml \
+        h5py \
+        typing-extensions
+
+RUN pip3 install --no-cache-dir --no-dependencies \
+        kokoro-onnx==0.5.0 \
+        opencv-python-headless
+
+COPY app/ /app/
+
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
+CMD ["python3", "Gemma4_vla.py"]
