@@ -11,9 +11,17 @@ services:
       stack: 67108864
     volumes:
       - ${MODEL_DIR}:/models:ro
-      - ${CUDA_PATH:-/usr/local/cuda}:/usr/local/cuda:ro
+      # Orin mounts host CUDA over /usr/local/cuda.
+      # Thor must NOT: its image already ships CUDA 13, and mounting the host
+      # tree over it would clobber the toolkit the binary was linked against.
+      # Thor therefore sets CUDA_MOUNT_TARGET to an unused path.
+      - ${CUDA_HOST_PATH:-/usr/local/cuda}:${CUDA_MOUNT_TARGET:-/usr/local/cuda}:ro
     environment:
-      LD_LIBRARY_PATH: /usr/local/cuda/targets/aarch64-linux/lib:/usr/local/cuda/lib64:/usr/local/lib
+      # Must match the CUDA target triple of the image in use:
+      #   Orin (l4t-jetpack)      -> targets/aarch64-linux
+      #   Thor (nvidia/cuda arm64) -> targets/sbsa-linux
+      # Set per platform in .env - this value overrides the image's own ENV.
+      LD_LIBRARY_PATH: ${LLAMA_LD_LIBRARY_PATH}
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
     command:
@@ -45,6 +53,8 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION}
       FRAME_PATH: /camera/latest.jpg
       FRAME_DIR: /camera
+      # Both topics must be sensor_msgs/msg/CompressedImage - verify with:
+      #   ros2 topic type ${GEMMA_SWIR_TOPIC}
       GEMMA_RGB_TOPIC: ${GEMMA_RGB_TOPIC}
       GEMMA_SWIR_TOPIC: ${GEMMA_SWIR_TOPIC}
       ACTION_GATEWAY_HOST: 0.0.0.0

@@ -1,0 +1,66 @@
+# Common agent image for Orin and Thor (arm64) - CPU only, no CUDA, no JetPack.
+# Runs Gemma4_vla.py: STT (onnx-asr) -> llama-server over HTTP -> TTS (kokoro-onnx)
+#
+# The agent performs no GPU compute - all CUDA work lives in the server container -
+# so it does not need an L4T/JetPack base. Using a Docker Hub base also removes the
+# dependency on NGC tags, which is what broke the JetPack build (no r38 image exists).
+#
+# Python 3.11 is pinned deliberately: onnxruntime==1.19.2 and numpy==1.26.4 have
+# well-established cp311 aarch64 wheels.
+
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1
+
+# Runtime libs only:
+#   libportaudio2    -> sounddevice
+#   libsndfile1      -> soundfile
+#   alsa-utils       -> arecord (used by Gemma4_vla.py)
+#   pulseaudio-utils -> paplay / pactl (used by Gemma4_vla.py)
+#   psmisc           -> pkill / fuser used during audio teardown
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libportaudio2 \
+        libsndfile1 \
+        alsa-utils \
+        pulseaudio-utils \
+        psmisc \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir \
+        onnxruntime==1.19.2 \
+        numpy==1.26.4 \
+        sounddevice \
+        soundfile \
+        requests \
+        onnx-asr \
+        espeakng-loader \
+        phonemizer-fork \
+        huggingface_hub \
+        attrs \
+        scipy \
+        tqdm \
+        certifi \
+        filelock \
+        fsspec \
+        pyyaml \
+        typing-extensions
+
+# kokoro-onnx pins a conflicting onnxruntime, so install it without dependencies.
+RUN pip install --no-cache-dir --no-dependencies kokoro-onnx==0.5.0
+
+# If `grep -n "cv2" app/Gemma4_vla.py` returns anything, uncomment the next line.
+# Install ONLY the headless variant - never both opencv packages.
+# RUN pip install --no-cache-dir opencv-python-headless
+
+COPY app/ /app/
+
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
+CMD ["python3", "Gemma4_vla.py"]

@@ -1,8 +1,16 @@
 # Common agent image for Orin and Thor (arm64)
-# Runs Gemma4_vla.py: STT (onnx-asr) -> llama-server -> TTS (kokoro-onnx)
-# No CUDA compute is used by the agent, so a single image serves both platforms.
+# Runs Gemma4_vla.py: STT (onnx-asr) -> llama-server over HTTP -> TTS (kokoro-onnx)
+#
+# BASE IMAGE NOTE:
+#   The latest published l4t-jetpack tag is r36.4.0. NVIDIA did NOT publish an
+#   l4t-jetpack (or l4t-base) container for JetPack 7 / r38 and has stated there
+#   is no plan to. Do not set JETPACK_TAG to r38.x - the manifest does not exist.
+#
+#   This JetPack 6 userspace runs fine on a Thor host for this agent, because the
+#   agent performs no CUDA compute. If you would rather not depend on NGC tags at
+#   all, use Dockerfile.agent.slim instead (Docker Hub base, ~1GB).
 
-ARG JETPACK_TAG=r38.2.1
+ARG JETPACK_TAG=r36.4.0
 FROM nvcr.io/nvidia/l4t-jetpack:${JETPACK_TAG}
 
 ENV DEBIAN_FRONTEND=noninteractive

@@ -1,7 +1,12 @@
 # llama.cpp server for Jetson AGX Orin / Orin NX
 # CUDA architecture: sm_87
-# Multi-stage: heavy toolchain stays in the builder, runtime keeps only binaries + libs.
-# No PyTorch, no Python ML stack -> minimal runtime image.
+#
+# BASE IMAGE NOTE: r36.4.0 is the latest published l4t-jetpack tag and is the
+# correct one for Orin / JetPack 6. Do not bump this to r38.x - no such image exists.
+#
+# Multi-stage: the CUDA toolchain, cmake and the llama.cpp source tree stay in the
+# builder. The runtime carries only llama-server and its shared libraries.
+# No PyTorch, no Python ML stack.
 
 ARG L4T_TAG=r36.4.0
 ARG CUDA_ARCH=87
@@ -30,8 +35,7 @@ RUN cmake -B build \
         -DLLAMA_BUILD_TESTS=OFF \
         -DLLAMA_BUILD_EXAMPLES=OFF \
         -DLLAMA_BUILD_SERVER=ON \
-    && cmake --build build --config Release -j"$(nproc)" --target llama-server \
-    && cmake --install build --prefix /opt/llama || true
+    && cmake --build build --config Release -j"$(nproc)" --target llama-server
 
 RUN mkdir -p /opt/llama/bin /opt/llama/lib \
     && cp build/bin/llama-server /opt/llama/bin/ \

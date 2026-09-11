@@ -39,9 +39,10 @@ done
 # ---------- 2. Models ----------
 ./verify-models.sh
 
-# ---------- 3. Images: use local, else pull, else fail ----------
+# ---------- 3. Images: use local, else pull, else fail with build hint ----------
 ensure_image() {
   local image="$1"
+  local hint="$2"
   if [ -z "$image" ]; then
     echo "ERROR: image variable is empty in $ENV_FILE"
     exit 1
@@ -54,17 +55,15 @@ ensure_image() {
   if ! docker pull "$image"; then
     echo
     echo "ERROR: could not pull $image"
-    echo "       Build it locally, e.g.:"
-    echo "         ./build-images.sh agent        $image"
-    echo "         ./build-images.sh bridge       $image"
-    echo "         ./build-images.sh ${PLATFORM}-server $image"
+    echo "       Build it locally:"
+    echo "         ./build-images.sh ${hint} $image"
     exit 1
   fi
 }
 
-ensure_image "$GEMMA_SERVER_IMAGE"
-ensure_image "$GEMMA_BRIDGE_IMAGE"
-ensure_image "$GEMMA_AGENT_IMAGE"
+ensure_image "$GEMMA_SERVER_IMAGE" "${PLATFORM}-server"
+ensure_image "$GEMMA_BRIDGE_IMAGE" "bridge"
+ensure_image "$GEMMA_AGENT_IMAGE"  "agent"
 
 # ---------- 4. Backend + bridge ----------
 echo "Starting gemma-backend and ros-image-bridge ..."
@@ -79,8 +78,12 @@ for i in $(seq 1 120); do
   fi
   if [ "$i" -eq 120 ]; then
     echo " TIMEOUT"
-    echo "ERROR: llama-server did not become ready. Logs:"
+    echo "ERROR: llama-server did not become ready. Recent logs:"
     docker compose --env-file "$ENV_FILE" logs --tail 60 gemma-backend
+    echo
+    echo "If you see 'unsupported toolchain', the CUDA toolkit used to build the"
+    echo "server image is newer than the CUDA version the driver reports in"
+    echo "nvidia-smi. Rebuild with a lower CUDA_TAG."
     exit 1
   fi
   sleep 2
@@ -103,6 +106,6 @@ for i in $(seq 1 30); do
   echo -n "."
 done
 
-# ---------- 7. Agent (interactive, needs a TTY for keyboard + audio) ----------
+# ---------- 7. Agent (interactive: needs a TTY for keyboard + audio) ----------
 echo "Starting VLA agent ..."
 docker compose --env-file "$ENV_FILE" run --rm --service-ports vla-agent
